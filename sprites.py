@@ -24,10 +24,16 @@ class Entity:
         return self.display_size[1]
     def get_rect(self):
         return self.rect
+    def get_x(self):
+        return self.rect[0]
+    def get_y(self):
+        return self.rect[1]
     
     def move(self, dx, dy):
         self.rect.move_ip(dx, dy)
     
+    def get_position(self):
+        return (self.rect[0], self.rect[1])
     def set_position(self, position):
         self.rect.topleft = position
     
@@ -53,11 +59,20 @@ class Entity:
 class Player(Entity):
     def __init__(self, position, images):
         super().__init__(position, images)
+        self.shot_cooldown = 0.5  # Seconds
+        self.last_shot_time = 0
+    
+    def shoot_lasers(self, curr_time, images):
+        if curr_time - self.last_shot_time >= self.shot_cooldown:
+            self.last_shot_time = curr_time
+            lasers = [Laser(self.get_position(), images, "left"), Laser(self.get_position(), images, "right")]
+            return lasers
+        else:
+            return []
 
 class Enemy(Entity):
     def __init__(self, position, images):
         super().__init__(position, images)
-        self.last = 0
         self.can_move = True
     
     def move(self, position, speed):
@@ -75,3 +90,25 @@ class Enemy(Entity):
     # String representation of object for debugging
     def __repr__(self) -> str:
         return "Enemy object"
+
+class Laser(Entity):
+    def __init__(self, position, images, direction):
+        valid_directions = ("up", "down", "left", "right")
+        if direction not in valid_directions:
+            raise Exception("Error: Invalid directions chosen!")
+        super().__init__(position, images)
+        self.display_size = (32, 32)
+        self.direction = direction
+    
+    def move(self, speed):
+        if self.direction == "up":
+            super().move(0, -speed)
+        elif self.direction == "down":
+            super().move(0, speed)
+        elif self.direction == "left":
+            super().move(-speed, 0)
+        elif self.direction == "right":
+            super().move(speed, 0)
+    
+    def offscreen(self):
+        pass
