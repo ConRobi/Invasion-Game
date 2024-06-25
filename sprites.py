@@ -1,4 +1,5 @@
 import pygame
+from settings import *
 
 class Entity:
     def __init__(self, position, images):
@@ -111,4 +112,6 @@ class Laser(Entity):
             super().move(speed, 0)
     
     def offscreen(self):
+        if self.rect[0] > SCREEN_WIDTH or self.rect[1] > SCREEN_HEIGHT:
+            print("Offscreen")
         pass

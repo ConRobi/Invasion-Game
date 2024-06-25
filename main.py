@@ -1,17 +1,12 @@
 import pygame, random, time, sys, os
 from sprites import Player, Enemy, Entity, Laser
+from settings import *
 
 class Game:
     def __init__(self):
         pygame.init()
-        self.screen_width = 1200
-        self.screen_height = 800
-        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
-        self.fps = 60
-        self.player_speed = 7
-        self.enemy_speed = 2
-        self.laser_speed = 5
     
     def load_imgs(self):
         self.background_imgs = [
@@ -41,11 +36,10 @@ class Game:
     def run(self):
         self.load_imgs()
 
-        # To start
-        player = Player((self.screen_width//2, self.screen_height//2), self.player_imgs)
+        player = Player((SCREEN_WIDTH//2, SCREEN_HEIGHT//2), self.player_imgs)
         to_draw = [player]
         for _ in range(3):
-            to_draw.append(Enemy((random.randint(0, self.screen_width), random.randint(0, self.screen_height)), self.enemy_ufo_imgs))
+            to_draw.append(Enemy((random.randint(0, SCREEN_WIDTH), random.randint(0, SCREEN_HEIGHT)), self.enemy_ufo_imgs))
         to_draw.append(Enemy((30, 30), self.enemy_spawner_imgs))
 
         run = True
@@ -59,38 +53,39 @@ class Game:
             current_time = time.time()
             
             # Drawing and animating
-            self.screen.blit(pygame.transform.scale(self.background_imgs[1], (self.screen_width, self.screen_height)), (0, 0))
+            self.screen.blit(pygame.transform.scale(self.background_imgs[1], (SCREEN_WIDTH, SCREEN_HEIGHT)), (0, 0))
             for x in to_draw:
                 if isinstance(x, Entity):
                     x.draw(self.screen)
                     x.animate(current_time)
                 if isinstance(x, Laser):
-                    x.move(self.laser_speed)
+                    x.move(LASER_SPEED)
+                    x.offscreen()
             
             for enem in to_draw:
                 if isinstance(enem, Enemy):
                     if enem.can_move:
-                        enem.move(player.get_rect(), self.enemy_speed)
+                        enem.move(player.get_rect(), ENEMY_SPEED)
 
             # Key action handling
             keys = pygame.key.get_pressed()
             # Up
-            if keys[pygame.K_UP] and player.get_y() - self.player_speed > 0:
-                player.move(0, -self.player_speed)
+            if keys[pygame.K_UP] and player.get_y() - PLAYER_SPEED > 0:
+                player.move(0, -PLAYER_SPEED)
             # Down
-            if keys[pygame.K_DOWN] and player.get_y() + player.get_h() + self.player_speed < self.screen_height:
-                player.move(0, self.player_speed)
+            if keys[pygame.K_DOWN] and player.get_y() + player.get_h() + PLAYER_SPEED < SCREEN_HEIGHT:
+                player.move(0, PLAYER_SPEED)
             # Left
-            if keys[pygame.K_LEFT] and player.get_x() - self.player_speed > 0:
-                player.move(-self.player_speed, 0)
+            if keys[pygame.K_LEFT] and player.get_x() - PLAYER_SPEED > 0:
+                player.move(-PLAYER_SPEED, 0)
             # Right
-            if keys[pygame.K_RIGHT] and player.get_x() + player.get_w() + self.player_speed < self.screen_width:
-                player.move(self.player_speed, 0)
+            if keys[pygame.K_RIGHT] and player.get_x() + player.get_w() + PLAYER_SPEED < SCREEN_WIDTH:
+                player.move(PLAYER_SPEED, 0)
             # Space
             if keys[pygame.K_SPACE]:
                 to_draw.extend(player.shoot_lasers(current_time, self.laser_imgs))
                 
-            self.clock.tick(self.fps)
+            self.clock.tick(FPS)
             pygame.display.update()
 
         pygame.quit()
