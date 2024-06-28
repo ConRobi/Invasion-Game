@@ -1,4 +1,4 @@
-import pygame
+import pygame, time
 from settings import *
 
 class Entity:
@@ -71,22 +71,93 @@ class Player(Entity):
         else:
             return []
 
-class Enemy(Entity):
-    def __init__(self, position, images):
-        super().__init__(position, images)
-        self.can_move = True
+# class Enemy(Entity):
+#     def __init__(self, position, images):
+#         super().__init__(position, images)
+#         self.can_move = True
+#         self.pause_time = 0
     
-    def move(self, position, speed):
-        dx, dy = 0, 0
-        if self.rect[0] < position[0]:  # left of player
-            dx = speed
-        elif self.rect[0] > position[0]:  # right of player
-            dx = -speed
-        if self.rect[1] < position[1]:  # above player
-            dy = speed
-        elif self.rect[1] > position[1]:  # below player
-            dy = -speed
-        super().move(dx, dy)
+#     def move(self, position, speed):
+#         dx, dy = 0, 0
+#         if self.rect[0] < position[0]:  # left of player
+#             dx = speed
+#         elif self.rect[0] > position[0]:  # right of player
+#             dx = -speed
+#         if self.rect[1] < position[1]:  # above player
+#             dy = speed
+#         elif self.rect[1] > position[1]:  # below player
+#             dy = -speed
+#         super().move(dx, dy)
+    
+#     def pause(self):
+#         self.pause_time = time.time()
+#         self.can_move = False
+    
+#     def resume(self):
+#         if time.time() - self.pause_time >= 0.2:
+#             self.can_move = True
+
+class Ship(Entity):
+    def __init__(self, position, images, direction):
+        if direction not in ("up", "down", "left", "right"):
+            raise Exception("Error: Invalid ship direction chosen!")
+        super().__init__(position, images)
+        self.direction = direction
+        self.is_active = False
+        self.images = images[:]  # Make clones of lists to not change og list?
+        
+        self.navigation = {
+            # Pygame rotation happens counter-clockwise -> reasoning behind angle
+            "up": {"angle": 270, "spawn": (SCREEN_WIDTH//2, SCREEN_HEIGHT - self.current_image.get_height()), "move": (0, -ENEMY_SPEED)},
+             "down": {"angle": 90, "spawn": (SCREEN_WIDTH//2, 0 + self.current_image.get_height()), "move": (0, ENEMY_SPEED)},
+             "left": {"angle": 0, "spawn": (SCREEN_WIDTH - self.current_image.get_width(), SCREEN_HEIGHT//2), "move": (-ENEMY_SPEED, 0)},
+             "right": {"angle": 180, "spawn": (0 + self.current_image.get_width(), SCREEN_HEIGHT//2), "move": (ENEMY_SPEED, 0)}
+             }
+
+        for i in range(len(images)):
+            self.images[i] = pygame.transform.rotate(self.images[i], self.navigation[direction]["angle"])
+    
+    def move(self):
+        if self.is_active == False:
+            self.set_position(self.navigation[self.direction]["spawn"])
+            self.is_active = True
+        super().move(*self.navigation[self.direction]["move"])
+
+
+class Enemy(Entity):
+    def __init__(self, position, images, type):
+        valid_types = ("ufo", "ship")
+        if type not in valid_types:
+            raise Exception("Error: Invalid enemy type chosen!")
+        super().__init__(position, images)
+        self.type = type
+        self.can_move = True
+        self.pause_time = 0
+        if type == "ship":
+            self.active = False
+    
+    def enemy_move(self, position):
+        if self.type == "ufo":
+            dx, dy = 0, 0
+            if self.rect[0] < position[0]:  # left of player
+                dx = ENEMY_SPEED
+            elif self.rect[0] > position[0]:  # right of player
+                dx = -ENEMY_SPEED
+            if self.rect[1] < position[1]:  # above player
+                dy = ENEMY_SPEED
+            elif self.rect[1] > position[1]:  # below player
+                dy = -ENEMY_SPEED
+            super().move(dx, dy)
+        elif self.type == "ship":
+            pass
+
+    def pause(self):
+        self.pause_time = time.time()
+        self.can_move = False
+    
+    def resume(self):
+        if time.time() - self.pause_time >= 0.2:
+            self.can_move = True
     
     # String representation of object for debugging
     def __repr__(self) -> str:
@@ -114,4 +185,7 @@ class Laser(Entity):
     def offscreen(self):
         if self.rect[0] > SCREEN_WIDTH or self.rect[1] > SCREEN_HEIGHT:
             print("Offscreen")
+        pass
+
+    def update(self):
         pass
