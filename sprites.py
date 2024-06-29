@@ -19,6 +19,9 @@ class Entity:
         # For movement and positioning
         self.rect = self.current_image.get_rect(topleft = position)
 
+        # Shooting lasers
+        self.last_shot = 0
+
     def get_w(self):
         return self.display_size[0]
     def get_h(self):
@@ -35,6 +38,7 @@ class Entity:
     
     def get_position(self):
         return (self.rect[0], self.rect[1])
+    
     def set_position(self, position):
         self.rect.topleft = position
     
@@ -56,6 +60,17 @@ class Entity:
                 return False
         else:
             raise Exception("Error: This method is only for use between entities!")
+    
+    def offscreen(self):
+        return self.rect[0] < 0 or self.rect[0] > SCREEN_WIDTH or self.rect[1] < 0 or self.rect[1] > SCREEN_HEIGHT
+    
+    def shot_cooldown(self, cooldown_time):
+        cur = time.time()
+        if cur - self.last_shot >= cooldown_time:
+            self.last_shot = cur
+            return True
+        else:
+            return False
 
 class Player(Entity):
     def __init__(self, position, images):
@@ -71,60 +86,53 @@ class Player(Entity):
         else:
             return []
 
-# class Enemy(Entity):
-#     def __init__(self, position, images):
-#         super().__init__(position, images)
-#         self.can_move = True
-#         self.pause_time = 0
-    
-#     def move(self, position, speed):
-#         dx, dy = 0, 0
-#         if self.rect[0] < position[0]:  # left of player
-#             dx = speed
-#         elif self.rect[0] > position[0]:  # right of player
-#             dx = -speed
-#         if self.rect[1] < position[1]:  # above player
-#             dy = speed
-#         elif self.rect[1] > position[1]:  # below player
-#             dy = -speed
-#         super().move(dx, dy)
-    
-#     def pause(self):
-#         self.pause_time = time.time()
-#         self.can_move = False
-    
-#     def resume(self):
-#         if time.time() - self.pause_time >= 0.2:
-#             self.can_move = True
-
-class Ship(Entity):
+class Enemy_Ship(Entity):
     def __init__(self, position, images, direction):
         if direction not in ("up", "down", "left", "right"):
             raise Exception("Error: Invalid ship direction chosen!")
         super().__init__(position, images)
         self.direction = direction
-        self.is_active = False
+        self.on_screen = False
         self.images = images[:]  # Make clones of lists to not change og list?
         
         self.navigation = {
             # Pygame rotation happens counter-clockwise -> reasoning behind angle
-            "up": {"angle": 270, "spawn": (SCREEN_WIDTH//2, SCREEN_HEIGHT - self.current_image.get_height()), "move": (0, -ENEMY_SPEED)},
-             "down": {"angle": 90, "spawn": (SCREEN_WIDTH//2, 0 + self.current_image.get_height()), "move": (0, ENEMY_SPEED)},
-             "left": {"angle": 0, "spawn": (SCREEN_WIDTH - self.current_image.get_width(), SCREEN_HEIGHT//2), "move": (-ENEMY_SPEED, 0)},
-             "right": {"angle": 180, "spawn": (0 + self.current_image.get_width(), SCREEN_HEIGHT//2), "move": (ENEMY_SPEED, 0)}
+            "up": {"angle": 270, "move": (0, -ENEMY_SHIP_SPEED)},
+             "down": {"angle": 90, "move": (0, ENEMY_SHIP_SPEED)},
+             "left": {"angle": 0, "move": (-ENEMY_SHIP_SPEED, 0)},
+             "right": {"angle": 180, "move": (ENEMY_SHIP_SPEED, 0)}
              }
 
         for i in range(len(images)):
             self.images[i] = pygame.transform.rotate(self.images[i], self.navigation[direction]["angle"])
     
-    def move(self):
-        if self.is_active == False:
-            self.set_position(self.navigation[self.direction]["spawn"])
-            self.is_active = True
+    def move(self, player_pos):
+        # Coordinates for ship to spawn lined up with the player
+        nav = {
+            "up": (player_pos[0], SCREEN_HEIGHT),
+            "down": (player_pos[0], 0),
+            "left": (SCREEN_WIDTH, player_pos[1]),
+            "right": (0, player_pos[1])
+        }
+        if self.on_screen == False:
+            self.set_position(nav[self.direction])
+            self.on_screen = True
+        if self.offscreen():
+            self.on_screen = False
         super().move(*self.navigation[self.direction]["move"])
+    
+    def shoot(self, laser_imgs):
+        if self.shot_cooldown(1):
+            if self.direction in ("up", "down"):
+                lsrs = [Laser(self.get_position(), laser_imgs[:], "left"), Laser(self.get_position(), laser_imgs[:], "right")]
+                to_draw.extend(lsrs)
+            elif self.direction in ("left", "right"):
+                flipped = [pygame.transform.rotate(i, 90) for i in laser_imgs[:]]
+                lsrs = [Laser(self.get_position(), flipped, "up"), Laser(self.get_position(), flipped, "down")]
+                to_draw.extend(lsrs)
 
 
-class Enemy(Entity):
+class Enemy_UFO(Entity):
     def __init__(self, position, images, type):
         valid_types = ("ufo", "ship")
         if type not in valid_types:
@@ -155,13 +163,12 @@ class Enemy(Entity):
         self.pause_time = time.time()
         self.can_move = False
     
-    def resume(self):
+    def try_resume(self):
         if time.time() - self.pause_time >= 0.2:
             self.can_move = True
     
-    # String representation of object for debugging
-    def __repr__(self) -> str:
-        return "Enemy object"
+    def shoot(self, laser_imgs):
+        pass
 
 class Laser(Entity):
     def __init__(self, position, images, direction):
@@ -172,20 +179,12 @@ class Laser(Entity):
         self.display_size = (32, 32)
         self.direction = direction
     
-    def move(self, speed):
+    def move(self):
         if self.direction == "up":
-            super().move(0, -speed)
+            super().move(0, -LASER_SPEED)
         elif self.direction == "down":
-            super().move(0, speed)
+            super().move(0, LASER_SPEED)
         elif self.direction == "left":
-            super().move(-speed, 0)
+            super().move(-LASER_SPEED, 0)
         elif self.direction == "right":
-            super().move(speed, 0)
-    
-    def offscreen(self):
-        if self.rect[0] > SCREEN_WIDTH or self.rect[1] > SCREEN_HEIGHT:
-            print("Offscreen")
-        pass
-
-    def update(self):
-        pass
+            super().move(LASER_SPEED, 0)
