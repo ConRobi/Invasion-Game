@@ -7,11 +7,13 @@ class Game:
         pygame.init()
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
+        self.data = {'level': 2, 'map': 0}
     
     def load_imgs(self):
         self.background_imgs = [
             pygame.image.load(os.path.join("assets", "spacebg.png")).convert_alpha(),
-            pygame.image.load(os.path.join("assets", "black_spacebg.png")).convert_alpha()
+            pygame.image.load(os.path.join("assets", "black_spacebg.png")).convert_alpha(),
+            pygame.image.load(os.path.join("assets", "new_spacebg.png")).convert_alpha()
             ]
 
         self.player_imgs = [
@@ -29,54 +31,56 @@ class Game:
             pygame.image.load(os.path.join("assets", "enemy_ship2.png")).convert_alpha()
         ]
 
-        self.player_laser_imgs = [
-            pygame.image.load(os.path.join("assets", "player_laser.png")).convert_alpha()
-        ]
-
-        self.enemy_laser_imgs = [
-            pygame.image.load(os.path.join("assets", "enemy_laser.png")).convert_alpha()
-        ]
+        self.laser_imgs = {
+            "player": pygame.image.load(os.path.join("assets", "player_laser.png")).convert_alpha(),
+            "enemy": pygame.image.load(os.path.join("assets", "enemy_laser.png")).convert_alpha()}
         
+    
+    def draw_bg(self):
+        self.screen.blit(pygame.transform.scale(self.background_imgs[self.data['map']], (SCREEN_WIDTH, SCREEN_HEIGHT)), (0, 0))
+    
+    def spawn_enemies(self):
+        for _ in range(self.data['level'] * 2):
+            to_draw.append(Enemy_Ufo((random.randint(0, SCREEN_WIDTH), random.randint(0, SCREEN_HEIGHT)), self.enemy_ufo_imgs))
+
+        for _ in range(self.data['level']//2):
+            to_draw.append(Enemy_Ship((random.randint(0, SCREEN_WIDTH), random.randint(0, SCREEN_HEIGHT)), 
+                                      self.enemy_ship_imgs, random.choice(["up", "down", "left", "right"])))
+
     def run(self):
+        """
+        Game Logic: 
+        - For every level there will be (2 * level) ufos and (level//2) ships.
+        """
+
         self.load_imgs()
+        self.spawn_enemies()
 
-        player = Player((SCREEN_WIDTH//2, SCREEN_HEIGHT//2), self.player_imgs)
-        # to_draw = [player]
+        player = Player(MIDDLE, self.player_imgs)
         to_draw.append(player)
-        for _ in range(4):
-            to_draw.append(Enemy_UFO((random.randint(0, SCREEN_WIDTH), random.randint(0, SCREEN_HEIGHT)), self.enemy_ufo_imgs, "ufo"))
 
-        lt = 0
+        self.data['map'] = random.randint(0, 2)
+
+        
         run = True
         while run:
-            current_time = time.time()
 
-            # Quitting
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    run = False
-            
-            # Drawing and animating
-            self.screen.blit(pygame.transform.scale(self.background_imgs[0], (SCREEN_WIDTH, SCREEN_HEIGHT)), (0, 0))
-            for x in to_draw:
-                if isinstance(x, Entity):
-                    x.draw(self.screen)
-                    x.animate(current_time)
+            # Drawing
+            self.draw_bg()
+            for item in to_draw:
+                if isinstance(item, Sprite):
+                    item.draw(self.screen)
+                    # Maybe use a lambda function to sort to_draw to handle the layers
 
             # Enemy Movement
             for enem in to_draw:
-                if isinstance(enem, Enemy_UFO):
-                    if enem.can_move:
-                        enem.enemy_move(player.get_rect())
-                    else:
-                        enem.try_resume()
-                if isinstance(enem, Enemy_Ship):
-                    enem.move(player.get_rect())
+                if isinstance(enem, Enemy_Ufo) or isinstance(enem, Enemy_Ship):
+                    enem.move(player.get_position())
             
             # Enemy shooting
             for enem in to_draw:
-                if isinstance(enem, Enemy_Ship) or isinstance(enem, Enemy_UFO):
-                    enem.shoot(self.enemy_laser_imgs)
+                if isinstance(enem, Enemy_Ship) or isinstance(enem, Enemy_Ufo):
+                    enem.shoot(self.laser_imgs['enemy'])
             
             # Lasers
             for lsr in to_draw:
@@ -86,15 +90,23 @@ class Game:
                         to_draw.remove(lsr)
             
             # Enemy_UFO collisions
-            to_draw2 = to_draw[:]
-            for enem1 in to_draw2:
-                for enem2 in to_draw2:
-                    if enem1 is not enem2 and isinstance(enem1, Enemy_UFO) and isinstance(enem2, Enemy_UFO):
-                        if enem1.collide(enem2):
-                            # Make one of the enemies stop moving for a second and remove the other enemy from the list clone
-                            enem1.pause()
-                            to_draw2.remove(enem2)
+            # to_draw2 = to_draw[:]
+            # for enem1 in to_draw2:
+            #     for enem2 in to_draw2:
+            #         if enem1 is not enem2 and isinstance(enem1, Enemy_UFO) and isinstance(enem2, Enemy_UFO):
+            #             if enem1.collide(enem2):
+            #                 # Make one of the enemies stop moving for a second and remove the other enemy from the list clone
+            #                 enem1.pause()
+            #                 to_draw2.remove(enem2)
             # enemies should also explode if they contact the player
+
+            # Laser collisions
+            for lsr in to_draw:
+                for x in to_draw:
+                    if isinstance(lsr, Laser) and lsr.owner == player and (isinstance(x, Enemy_Ship) or isinstance(x, Enemy_Ufo)) and lsr.collide(x):
+                        to_draw.remove(x)
+                        to_draw.remove(lsr)
+                        break
 
             # Key action handling
             keys = pygame.key.get_pressed()
@@ -110,12 +122,16 @@ class Game:
             # Right
             if keys[pygame.K_RIGHT] and player.get_x() + player.get_w() + PLAYER_SPEED < SCREEN_WIDTH:
                 player.move(PLAYER_SPEED, 0)
-            # Space
-            if keys[pygame.K_SPACE]:
-                # to_draw.extend(player.shoot_lasers(current_time, self.laser_imgs))
-                if current_time - lt >= 1:
-                    to_draw.append(Enemy_Ship((0,0), self.enemy_ship_imgs, random.choice(["up", "down", "left", "right"])))
-                    lt = current_time
+            
+            if keys[pygame.K_s]:
+                player.shoot(self.laser_imgs['player'])
+            if keys[pygame.K_t]:
+                print(to_draw)
+            
+            # Quitting
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    run = False
                 
             self.clock.tick(FPS)
             pygame.display.update()

@@ -1,190 +1,164 @@
 import pygame, time
 from settings import *
 
-class Entity:
-    def __init__(self, position, images):
-        self.display_size = (64,64)
-        self.images = images
+""" Other functions """
+def check_direction(direction):
+    if direction not in ("up", "down", "left", "right"):
+        raise Exception("Error: Invalid direction chosen!")
 
-        # For animation
-        self.anim_index = 0
-        self.current_image = pygame.transform.scale(self.images[self.anim_index], self.display_size)
-        self.mask = pygame.mask.from_surface(self.current_image)
-        self.anim_cooldown = 0.3  # seconds
-        self.last_anim_time = 0
-
-        # For collisions
-        self.mask = pygame.mask.from_surface(self.current_image)
-
-        # For movement and positioning
-        self.rect = self.current_image.get_rect(topleft = position)
-
-        # Shooting lasers
-        self.last_shot = 0
-
+""" Classes """
+class Sprite:
+    def __init__(self, position: tuple, image):
+        self.display_size = (32,32)
+        self.current_img = image
+        self.mask = pygame.mask.from_surface(self.current_img)
+        self.rect = self.current_img.get_rect(topleft = position)
+    
     def get_w(self):
         return self.display_size[0]
+    
     def get_h(self):
         return self.display_size[1]
-    def get_rect(self):
-        return self.rect
+    
     def get_x(self):
         return self.rect[0]
+    
     def get_y(self):
         return self.rect[1]
-    
-    def move(self, dx, dy):
-        self.rect.move_ip(dx, dy)
     
     def get_position(self):
         return (self.rect[0], self.rect[1])
     
     def set_position(self, position):
         self.rect.topleft = position
-    
-    def draw(self, screen):
-        screen.blit(pygame.transform.scale(self.current_image, self.display_size), self.rect)
 
-    def animate(self, curr_time):
-        if curr_time - self.last_anim_time >= self.anim_cooldown:
-            self.anim_index = (self.anim_index + 1) % len(self.images)
-            self.current_image = pygame.transform.scale(self.images[self.anim_index], self.display_size)
-            self.mask = pygame.mask.from_surface(self.current_image)
-            self.last_anim_time = curr_time
-    
+    def draw(self, screen):
+        screen.blit(pygame.transform.scale(self.current_img, self.display_size), self.rect)
+
+    def move(self, dx, dy):
+        self.rect.move_ip(dx, dy)
+
     def collide(self, other):
-        if isinstance(other, Entity):
+        if isinstance(other, Sprite):
             if other.mask.overlap(self.mask, (self.rect[0] - other.rect[0], self.rect[1] - other.rect[1])):
                 return True
             else:
                 return False
         else:
-            raise Exception("Error: This method is only for use between entities!")
-    
+            raise Exception("Error: This method is only for use between Sprite objects!")
+
     def offscreen(self):
-        return self.rect[0] < 0 or self.rect[0] > SCREEN_WIDTH or self.rect[1] < 0 or self.rect[1] > SCREEN_HEIGHT
+        return (self.rect[0] + self.get_w()) < 0 or self.rect[0] > SCREEN_WIDTH or (self.rect[1] + self.get_h()) < 0 or self.rect[1] > SCREEN_HEIGHT
+
+class Entity(Sprite):
+    def __init__(self, position: tuple, images):
+        self.anim_index = 0
+        self.anim_cooldown = 0.3  # Seconds
+        self.last_anim_time = 0
+        self.images = images[:]  # A copy so the original list isn't changed
+        super().__init__(position, image=self.images[self.anim_index])
+
+        self.display_size = (64,64)
+        self.last_shot_time = 0
     
+    def animate(self):
+        ct = time.time()  # Current time
+        if ct - self.last_anim_time >= self.anim_cooldown:
+            self.anim_index = (self.anim_index + 1) % len(self.images)
+            self.current_image = pygame.transform.scale(self.images[self.anim_index], self.display_size)
+            self.mask = pygame.mask.from_surface(self.current_image)
+            self.last_anim_time = ct
+    
+    def draw(self, screen):
+        super().draw(screen)
+        self.animate()
+
     def shot_cooldown(self, cooldown_time):
         cur = time.time()
-        if cur - self.last_shot >= cooldown_time:
-            self.last_shot = cur
+        if cur - self.last_shot_time >= cooldown_time:
+            self.last_shot_time = cur
             return True
         else:
             return False
 
 class Player(Entity):
-    def __init__(self, position, images):
+    def __init__(self, position: tuple, images, health = 100):
         super().__init__(position, images)
-        self.shot_cooldown = 0.5  # Seconds
-        self.last_shot_time = 0
+        self.max_health = health
+        self.current_health = health
+
+    def shoot(self, laser_img):
+        if self.shot_cooldown(0.5):
+            for direction in ("up", "down", "left", "right"):
+                to_draw.append(Laser(self.get_position(), laser_img, direction, self))
+
+class Laser(Sprite):
+    def __init__(self, position: tuple, image, direction: str, owner = None):
+        super().__init__(position, image)
+        check_direction(direction)
+        self.direction = direction
+        self.owner = owner
     
-    def shoot_lasers(self, curr_time, images):
-        if curr_time - self.last_shot_time >= self.shot_cooldown:
-            self.last_shot_time = curr_time
-            lasers = [Laser(self.get_position(), images, "left"), Laser(self.get_position(), images, "right")]
-            return lasers
-        else:
-            return []
+    def move(self):
+        x = {"up": (0, -LASER_SPEED), "down": (0, LASER_SPEED), "left": (-LASER_SPEED, 0), "right": (LASER_SPEED, 0)}
+        super().move(*x[self.direction])
+
+""" Enemies (Movement based on player position) """
 
 class Enemy_Ship(Entity):
-    def __init__(self, position, images, direction):
-        if direction not in ("up", "down", "left", "right"):
-            raise Exception("Error: Invalid ship direction chosen!")
+    def __init__(self, position: tuple, images, direction):
         super().__init__(position, images)
+        check_direction(direction)
         self.direction = direction
-        self.on_screen = False
-        self.images = images[:]  # Make clones of lists to not change og list?
-        
-        self.navigation = {
-            # Pygame rotation happens counter-clockwise -> reasoning behind angle
-            "up": {"angle": 270, "move": (0, -ENEMY_SHIP_SPEED)},
-             "down": {"angle": 90, "move": (0, ENEMY_SHIP_SPEED)},
-             "left": {"angle": 0, "move": (-ENEMY_SHIP_SPEED, 0)},
-             "right": {"angle": 180, "move": (ENEMY_SHIP_SPEED, 0)}
-             }
 
+        # Angle to rotate ship image (is currently facing left)
+        x = {"up": 270, "down": 90, "left": 0, "right": 180}
         for i in range(len(images)):
-            self.images[i] = pygame.transform.rotate(self.images[i], self.navigation[direction]["angle"])
-    
+            self.images[i] = pygame.transform.rotate(self.images[i], x[self.direction])
+            
     def move(self, player_pos):
         # Coordinates for ship to spawn lined up with the player
-        nav = {
-            "up": (player_pos[0], SCREEN_HEIGHT),
-            "down": (player_pos[0], 0),
-            "left": (SCREEN_WIDTH, player_pos[1]),
-            "right": (0, player_pos[1])
-        }
-        if self.on_screen == False:
-            self.set_position(nav[self.direction])
-            self.on_screen = True
+        spawn = {"up": (player_pos[0], SCREEN_HEIGHT), "down": (player_pos[0], 0), "left": (SCREEN_WIDTH, player_pos[1]),"right": (0, player_pos[1])}
+        to = {"up": (0, -ENEMY_SHIP_SPEED), "down": (0, ENEMY_SHIP_SPEED), "left": (-ENEMY_SHIP_SPEED, 0), "right": (ENEMY_SHIP_SPEED, 0)}
         if self.offscreen():
-            self.on_screen = False
-        super().move(*self.navigation[self.direction]["move"])
+            self.set_position(spawn[self.direction])
+        super().move(*to[self.direction])
     
-    def shoot(self, laser_imgs):
+    def shoot(self, laser_img):
         if self.shot_cooldown(1):
             if self.direction in ("up", "down"):
-                lsrs = [Laser(self.get_position(), laser_imgs[:], "left"), Laser(self.get_position(), laser_imgs[:], "right")]
+                lsrs = [Laser(self.get_position(), laser_img, "left"), Laser(self.get_position(), laser_img, "right")]
                 to_draw.extend(lsrs)
             elif self.direction in ("left", "right"):
-                flipped = [pygame.transform.rotate(i, 90) for i in laser_imgs[:]]
-                lsrs = [Laser(self.get_position(), flipped, "up"), Laser(self.get_position(), flipped, "down")]
+                lsrs = [Laser(self.get_position(), laser_img, "up"), Laser(self.get_position(), laser_img, "down")]
                 to_draw.extend(lsrs)
 
-
-class Enemy_UFO(Entity):
-    def __init__(self, position, images, type):
-        valid_types = ("ufo", "ship")
-        if type not in valid_types:
-            raise Exception("Error: Invalid enemy type chosen!")
+class Enemy_Ufo(Entity):
+    def __init__(self, position: tuple, images):
         super().__init__(position, images)
-        self.type = type
         self.can_move = True
-        self.pause_time = 0
-        if type == "ship":
-            self.active = False
+        self.last_pause_time = 0
     
-    def enemy_move(self, position):
-        if self.type == "ufo":
+    def move(self, player_pos):
+        if self.can_move:
             dx, dy = 0, 0
-            if self.rect[0] < position[0]:  # left of player
-                dx = ENEMY_SPEED
-            elif self.rect[0] > position[0]:  # right of player
-                dx = -ENEMY_SPEED
-            if self.rect[1] < position[1]:  # above player
-                dy = ENEMY_SPEED
-            elif self.rect[1] > position[1]:  # below player
-                dy = -ENEMY_SPEED
+            if self.rect[0] < player_pos[0]:  # left of player
+                dx = ENEMY_UFO_SPEED
+            elif self.rect[0] > player_pos[0]:  # right of player
+                dx = -ENEMY_UFO_SPEED
+            if self.rect[1] < player_pos[1]:  # above player
+                dy = ENEMY_UFO_SPEED
+            elif self.rect[1] > player_pos[1]:  # below player
+                dy = -ENEMY_UFO_SPEED
             super().move(dx, dy)
-        elif self.type == "ship":
-            pass
 
     def pause(self):
-        self.pause_time = time.time()
+        self.last_pause_time = time.time()
         self.can_move = False
     
     def try_resume(self):
-        if time.time() - self.pause_time >= 0.2:
+        if time.time() - self.last_pause_time >= 0.2:
             self.can_move = True
     
-    def shoot(self, laser_imgs):
+    def shoot(self, laser_img):
         pass
-
-class Laser(Entity):
-    def __init__(self, position, images, direction):
-        valid_directions = ("up", "down", "left", "right")
-        if direction not in valid_directions:
-            raise Exception("Error: Invalid directions chosen!")
-        super().__init__(position, images)
-        self.display_size = (32, 32)
-        self.direction = direction
-    
-    def move(self):
-        if self.direction == "up":
-            super().move(0, -LASER_SPEED)
-        elif self.direction == "down":
-            super().move(0, LASER_SPEED)
-        elif self.direction == "left":
-            super().move(-LASER_SPEED, 0)
-        elif self.direction == "right":
-            super().move(LASER_SPEED, 0)
