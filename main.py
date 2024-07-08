@@ -45,7 +45,7 @@ class Game:
 
         for _ in range(self.data['level']//2):
             to_draw.append(Enemy_Ship((random.randint(0, SCREEN_WIDTH), random.randint(0, SCREEN_HEIGHT)), 
-                                      self.enemy_ship_imgs, random.choice(["up", "down", "left", "right"])))
+                                      self.enemy_ship_imgs, direction=random.choice(["up", "down", "left", "right"])))
 
     def run(self):
         """
@@ -59,28 +59,33 @@ class Game:
         player = Player(MIDDLE, self.player_imgs)
         to_draw.append(player)
 
-        self.data['map'] = random.randint(0, 2)
+        # self.data['map'] = random.randint(0, 2)
+        self.data['map'] = 0
 
-        
         run = True
         while run:
-
+            
             # Drawing
             self.draw_bg()
             for item in to_draw:
                 if isinstance(item, Sprite):
                     item.draw(self.screen)
-                    # Maybe use a lambda function to sort to_draw to handle the layers
+                if isinstance(item, Entity):
+                    item.animate()
 
             # Enemy Movement
             for enem in to_draw:
+                if isinstance(enem, Enemy_Ufo):
+                    enem.try_resume()
                 if isinstance(enem, Enemy_Ufo) or isinstance(enem, Enemy_Ship):
                     enem.move(player.get_position())
             
             # Enemy shooting
             for enem in to_draw:
-                if isinstance(enem, Enemy_Ship) or isinstance(enem, Enemy_Ufo):
+                if isinstance(enem, Enemy_Ship):
                     enem.shoot(self.laser_imgs['enemy'])
+                if isinstance(enem, Enemy_Ufo):
+                    enem.shoot(self.laser_imgs['enemy'], player.get_position())
             
             # Lasers
             for lsr in to_draw:
@@ -90,14 +95,14 @@ class Game:
                         to_draw.remove(lsr)
             
             # Enemy_UFO collisions
-            # to_draw2 = to_draw[:]
-            # for enem1 in to_draw2:
-            #     for enem2 in to_draw2:
-            #         if enem1 is not enem2 and isinstance(enem1, Enemy_UFO) and isinstance(enem2, Enemy_UFO):
-            #             if enem1.collide(enem2):
-            #                 # Make one of the enemies stop moving for a second and remove the other enemy from the list clone
-            #                 enem1.pause()
-            #                 to_draw2.remove(enem2)
+            to_draw2 = to_draw[:]
+            for enem1 in to_draw2:
+                for enem2 in to_draw2:
+                    if enem1 is not enem2 and isinstance(enem1, Enemy_Ufo) and isinstance(enem2, Enemy_Ufo):
+                        if enem1.collide(enem2):
+                            # Make one of the enemies stop moving for a second and remove the other enemy from the list clone
+                            enem1.pause()
+                            to_draw2.remove(enem2)
             # enemies should also explode if they contact the player
 
             # Laser collisions
@@ -126,7 +131,9 @@ class Game:
             if keys[pygame.K_s]:
                 player.shoot(self.laser_imgs['player'])
             if keys[pygame.K_t]:
-                print(to_draw)
+                for i in to_draw:
+                    if isinstance(i, Enemy_Ufo):
+                        i.test(self.screen)
             
             # Quitting
             for event in pygame.event.get():

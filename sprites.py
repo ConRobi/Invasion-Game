@@ -65,13 +65,13 @@ class Entity(Sprite):
         ct = time.time()  # Current time
         if ct - self.last_anim_time >= self.anim_cooldown:
             self.anim_index = (self.anim_index + 1) % len(self.images)
-            self.current_image = pygame.transform.scale(self.images[self.anim_index], self.display_size)
-            self.mask = pygame.mask.from_surface(self.current_image)
+            self.current_img = pygame.transform.scale(self.images[self.anim_index], self.display_size)
+            self.mask = pygame.mask.from_surface(self.current_img)
             self.last_anim_time = ct
     
-    def draw(self, screen):
-        super().draw(screen)
-        self.animate()
+    def test(self, screen):
+        for i in range(len(self.images)):
+            screen.blit(pygame.transform.scale(self.images[i], self.display_size), (64 * i, 400))
 
     def shot_cooldown(self, cooldown_time):
         cur = time.time()
@@ -98,6 +98,8 @@ class Laser(Sprite):
         check_direction(direction)
         self.direction = direction
         self.owner = owner
+        if self.direction in ("up", "down"):
+            self.current_img = pygame.transform.rotate(self.current_img, 90)
     
     def move(self):
         x = {"up": (0, -LASER_SPEED), "down": (0, LASER_SPEED), "left": (-LASER_SPEED, 0), "right": (LASER_SPEED, 0)}
@@ -113,8 +115,7 @@ class Enemy_Ship(Entity):
 
         # Angle to rotate ship image (is currently facing left)
         x = {"up": 270, "down": 90, "left": 0, "right": 180}
-        for i in range(len(images)):
-            self.images[i] = pygame.transform.rotate(self.images[i], x[self.direction])
+        self.images = [pygame.transform.rotate(i, x[self.direction]) for i in self.images]
             
     def move(self, player_pos):
         # Coordinates for ship to spawn lined up with the player
@@ -160,5 +161,15 @@ class Enemy_Ufo(Entity):
         if time.time() - self.last_pause_time >= 0.2:
             self.can_move = True
     
-    def shoot(self, laser_img):
-        pass
+    def shoot(self, laser_img, player_pos):
+            if self.shot_cooldown(2):
+                lsrs = []
+                if self.rect[0] < player_pos[0]:  # left of player
+                    lsrs.append(Laser(self.get_position(), laser_img, "right"))
+                if self.rect[0] > player_pos[0]:  # right of player
+                    lsrs.append(Laser(self.get_position(), laser_img, "left"))
+                elif self.rect[1] < player_pos[1]:  # above player
+                    lsrs.append(Laser(self.get_position(), laser_img, "down"))
+                elif self.rect[1] > player_pos[1]:  # below player
+                    lsrs.append(Laser(self.get_position(), laser_img, "up"))
+                to_draw.extend(lsrs)

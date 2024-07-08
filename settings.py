@@ -15,5 +15,4 @@ ENEMY_SHIP_SPEED = 5
 
 FPS = 60
 
-# Could maybe put to_draw in here? and or name it to handle?
 to_draw = []
