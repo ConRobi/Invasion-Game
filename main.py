@@ -7,7 +7,7 @@ class Game:
         pygame.init()
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
-        self.data = {'level': 2, 'map': 0}
+        self.data = {'level': 1, 'map': 0}
     
     def load_imgs(self):
         self.background_imgs = [
@@ -40,12 +40,23 @@ class Game:
         self.screen.blit(pygame.transform.scale(self.background_imgs[self.data['map']], (SCREEN_WIDTH, SCREEN_HEIGHT)), (0, 0))
     
     def spawn_enemies(self):
-        for _ in range(self.data['level'] * 2):
+        x = random.randint(self.data['level'], self.data['level'] * 2)
+        for _ in range(x):
             to_draw.append(Enemy_Ufo((random.randint(0, SCREEN_WIDTH), random.randint(0, SCREEN_HEIGHT)), self.enemy_ufo_imgs))
 
         for _ in range(self.data['level']//2):
             to_draw.append(Enemy_Ship((random.randint(0, SCREEN_WIDTH), random.randint(0, SCREEN_HEIGHT)), 
                                       self.enemy_ship_imgs, direction=random.choice(["up", "down", "left", "right"])))
+
+    def level_clear(self):
+        for item in to_draw:
+            if isinstance(item, Enemy_Ship) or isinstance(item, Enemy_Ufo):
+                return False
+        return True
+
+    def next_level(self):
+        self.data['level'] += 1
+        self.spawn_enemies()
 
     def run(self):
         """
@@ -134,6 +145,10 @@ class Game:
                 for i in to_draw:
                     if isinstance(i, Enemy_Ufo):
                         i.test(self.screen)
+
+            # Next level
+            if self.level_clear():
+                self.next_level()
             
             # Quitting
             for event in pygame.event.get():
